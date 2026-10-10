@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="title desc">
+<title id="title">Codex Usage for SwiftBar, fictional example</title><desc id="desc">An illustrative macOS menu bar with Personal quota at 23 percent and Second account at 71 percent. Values come from the public demo.py fixture and do not show live accounts.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#19252d"/><stop offset="1" stop-color="#0b1410"/></linearGradient><filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dy="14" stdDeviation="20" flood-opacity=".45"/></filter></defs>
+<rect width="1200" height="650" fill="url(#bg)"/>
+<g font-family="-apple-system,BlinkMacSystemFont,Arial,sans-serif">
+<rect x="50" y="54" width="1100" height="48" rx="12" fill="#252d32" stroke="#566068"/>
+<text x="76" y="85" fill="#e7edef" font-size="20">SwiftBar</text>
+<rect x="615" y="60" width="470" height="36" rx="7" fill="#11191d"/>
+<text x="641" y="84" fill="#ffb558" font-size="20" font-weight="600">P23% 5d18h</text><text x="795" y="84" fill="#96a2a6" font-size="20">│</text><text x="822" y="84" fill="#71db99" font-size="20" font-weight="600">S71% 1d17h</text>
+<g filter="url(#shadow)"><rect x="615" y="112" width="470" height="416" rx="15" fill="#252d32" stroke="#5a6269"/>
+<text x="642" y="155" fill="#f1f4f6" font-size="21" font-weight="600">Personal</text>
+<text x="642" y="190" fill="#ffb558" font-size="19">23% remaining</text><text x="1056" y="190" fill="#bdc8ce" text-anchor="end" font-size="16">resets in 5d18h</text>
+<rect x="642" y="211" width="414" height="7" rx="3.5" fill="#12191e"/><rect x="642" y="211" width="95" height="7" rx="3.5" fill="#ffb558"/>
+<path d="M635 247h430" stroke="#4a545c"/>
+<text x="642" y="285" fill="#f1f4f6" font-size="21" font-weight="600">Second account</text>
+<text x="642" y="320" fill="#71db99" font-size="19">71% remaining</text><text x="1056" y="320" fill="#bdc8ce" text-anchor="end" font-size="16">resets in 1d17h</text>
+<rect x="642" y="341" width="414" height="7" rx="3.5" fill="#12191e"/><rect x="642" y="341" width="294" height="7" rx="3.5" fill="#71db99"/>
+<path d="M635 379h430" stroke="#4a545c"/><text x="642" y="417" fill="#dfe7eb" font-size="18">Subscription quota, side by side</text><text x="642" y="451" fill="#aebdc4" font-size="16">Clear percentages and reset countdowns</text>
+<text x="642" y="497" fill="#aebdc4" font-size="14">Fictional illustration · values from demo.py</text></g>
+<text x="90" y="260" fill="#72de9a" font-size="16" letter-spacing="2">FREE / OPEN SOURCE</text><text x="90" y="314" fill="#f1f5f3" font-size="38" font-weight="600">Codex Usage</text><text x="90" y="360" fill="#f1f5f3" font-size="38" font-weight="600">for SwiftBar</text><text x="90" y="410" fill="#b2c0bb" font-size="21">Multiple subscriptions.</text><text x="90" y="442" fill="#b2c0bb" font-size="21">One glance.</text>
+</g></svg>
