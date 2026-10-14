@@ -28,6 +28,9 @@ a { color: inherit; }
 .site-maxim { margin: 0; color: var(--muted); font-size: .72rem; letter-spacing: .02em; line-height: 1.5; overflow-wrap: anywhere; transition: opacity .24s ease; }
 .site-maxim [data-quote-text] { font-style: italic; }
 .site-maxim.is-changing { opacity: 0; }
+@media (max-width: 860px) {
+  .quote-carousel .site-maxim { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-height: 24px; overflow: hidden; }
+}
 .quote-attribution { color: #7f9585; }
 .quote-carousel > button { align-self: center; min-height: 30px; min-width: 24px; padding: 2px 5px; color: var(--muted); background: none; border: 0; font: inherit; font-size: .85rem; cursor: pointer; }
 .quote-carousel > button:hover { color: var(--green); }
@@ -82,7 +85,7 @@ main { min-width: 0; }
 .intro-copy { max-width: 720px; }
 .intro-copy p { margin: 0; color: var(--muted); }
 .intro-copy .opening { margin-top: 0; margin-bottom: 10px; color: var(--text); font-size: clamp(1.35rem, 2.2vw, 1.75rem); font-weight: 500; line-height: 1.5; letter-spacing: -.025em; }
-.intro-copy .thread-question { max-width: 660px; color: var(--green); font-size: .72rem; font-weight: 500; line-height: 1.5; letter-spacing: -.015em; }
+.intro-copy .thread-question { max-width: 660px; padding-left: 12px; border-left: 2px solid var(--green); color: var(--green); font-family: var(--mono); font-size: .82rem; font-style: italic; font-weight: 400; line-height: 1.6; letter-spacing: -.015em; }
 .page-section { padding: 27px 26px 31px; border-bottom: 1px solid var(--line); scroll-margin-top: calc(var(--header-height) + 18px); }
 h2 { margin: 0 0 17px; }
 .section-symbol { display: inline-block; width: 1.3em; margin-right: 5px; color: var(--green); font-size: 1rem; font-weight: 700; text-align: center; }
@@ -96,7 +99,7 @@ h3 { margin-bottom: 8px; font-size: 1.35rem; line-height: 1.3; letter-spacing: -
 .logo-panel img { width: min(100%, 220px); max-height: 104px; object-fit: contain; }
 .project-copy { display: flex; flex-direction: column; align-items: flex-start; padding: 19px 22px; }
 .project-copy > p { max-width: 680px; margin-bottom: 12px; color: var(--muted); }
-.project-copy .project-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; font-size: .61rem; line-height: 1.4; letter-spacing: .035em; text-transform: uppercase; }
+.project-copy .project-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; font-size: .75rem; line-height: 1.4; letter-spacing: .035em; text-transform: uppercase; }
 .project-meta span { padding: 3px 7px; border: 1px solid var(--line); border-radius: 2px; }
 .project-meta .free-label { color: var(--green); border-color: #28773d; background: rgb(30 215 96 / 8%); font-weight: 700; }
 .project-copy .text-link, .project-copy .pending-link { margin-top: auto; }
@@ -326,8 +329,12 @@ h3 { margin-bottom: 8px; font-size: 1.35rem; line-height: 1.3; letter-spacing: -
 .shelf-links a { position: relative; z-index: 3; }
 .shelf-image::after { position: absolute; bottom: 10px; right: 10px; z-index: 2; padding: 5px 8px; border: 1px solid #759781; background: rgb(10 16 12 / 90%); color: var(--text); content: 'View project ↗'; font: .62rem var(--mono); opacity: 0; transform: translateY(4px); transition: opacity .18s ease, transform .18s ease; pointer-events: none; }
 .shelf-card:hover .shelf-image::after, .shelf-card:focus-within .shelf-image::after { opacity: 1; transform: none; }
-.shelf-copy .project-meta { font-size: .55rem; gap: 4px; letter-spacing: 0; }
+.shelf-copy .project-meta { font-size: .75rem; gap: 4px; letter-spacing: 0; }
 .shelf-copy .project-meta span { padding: 2px 5px; white-space: nowrap; }
+@media (max-width: 400px) {
+  .shelf-copy .project-meta { font-size: .65rem; gap: 2px; }
+  .shelf-copy .project-meta span { padding: 2px 4px; }
+}
 .shelf-image[data-carousel] img { position: absolute; inset: 0; opacity: 0; transition: opacity .45s ease, transform .3s ease; }
 .shelf-image[data-carousel] img.is-current { opacity: 1; }
 .shelf-pause { position: absolute; right: 9px; top: 9px; z-index: 4; width: 28px; height: 28px; padding: 0; border: 1px solid #6f8777; background: rgb(10 16 12 / 85%); color: var(--text); font: 1rem var(--mono); cursor: pointer; opacity: 0; transition: opacity .18s ease; }
@@ -355,7 +362,65 @@ h3 { margin-bottom: 8px; font-size: 1.35rem; line-height: 1.3; letter-spacing: -
   .project-detail .app-gallery { padding: 10px; }
 }
 
-/* A brief family mention stays within the existing Who am I heading row. */
-.intro-heading { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; }
-.intro-heading h2 { margin: 0; }
-.intro-family { margin: 0; color: var(--muted); font: .75rem/1.2 var(--body); }
+/* Keep small project labels readable and map targets usable without enlarging previews. */
+.shelf-status { font-size: .8rem; }
+.section-index a, .mobile-index a { min-height: 24px; padding-top: 4px; padding-bottom: 4px; }
+@media (max-width: 860px) {
+  .mobile-index a { min-height: 32px; padding-top: 6px; padding-bottom: 6px; }
+}
+
+/* Compact mobile spacing keeps existing content and contextual actions. */
+@media (max-width: 860px) {
+  .masthead { padding-top: 8px; padding-bottom: 8px; }
+  .masthead.is-compact { padding-top: 6px; padding-bottom: 6px; }
+  .intro { padding-top: 20px; padding-bottom: 20px; row-gap: 14px; }
+  .page-section { padding-top: 24px; padding-bottom: 24px; }
+  .mobile-shortcuts { padding-top: 6px; padding-bottom: 6px; }
+  .inspiration-bar { padding-top: 4px; padding-bottom: calc(4px + env(safe-area-inset-bottom)); }
+  .shelf-copy { padding-top: 14px; padding-bottom: 14px; }
+  .shelf-copy h3 { margin-bottom: 8px; }
+  .shelf-copy .project-meta { margin-bottom: 9px; }
+  .shelf-description { margin-bottom: 12px; }
+  .shelf-status { margin-top: 4px; }
+}
+
+/* Pending or failed image requests never silently replace a decoded frame. */
+.image-state { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 6px 8px; border: 1px solid var(--line); background: var(--black); color: var(--muted); font: .72rem/1.45 var(--mono); }
+.image-state > span { min-width: 0; overflow-wrap: anywhere; }
+.image-retry { flex-shrink: 0; min-height: 30px; padding: 4px 8px; border: 1px solid var(--green); background: var(--panel); color: var(--green); font: inherit; cursor: pointer; }
+.image-retry[aria-disabled="true"] { color: var(--muted); border-color: var(--line); cursor: wait; }
+.shelf-image > .image-state { position: absolute; z-index: 4; bottom: 6px; left: 6px; right: 6px; margin: 0; }
+
+/* Compact overview: retain text size and content, reclaim margins and preview height. */
+@media (min-width: 861px) {
+  .masthead { padding-top: 8px; padding-bottom: 8px; }
+  .intro { grid-template-columns: 140px minmax(0, 1fr); gap: 8px 22px; padding-top: 10px; padding-bottom: 10px; }
+  .intro > h2 { margin-bottom: 0; }
+  .portrait { width: 140px; }
+  .intro-copy .kicker { margin-bottom: 8px; }
+  .intro-copy .opening { margin-bottom: 8px; line-height: 1.32; }
+  .page-section { padding-top: 18px; padding-bottom: 20px; }
+  .page-section > h2 { margin-bottom: 8px; }
+  .project-shelves { gap: 8px; row-gap: 6px; }
+  .shelf-image { height: 72px; }
+  .shelf-copy { padding: 8px 12px; }
+  .shelf-copy h3 { margin-bottom: 6px; font-size: 1.1rem; line-height: 1.25; }
+  .shelf-copy .project-meta { margin-bottom: 8px; }
+  .shelf-description { margin-bottom: 10px; font-size: .9rem; line-height: 1.48; }
+  .shelf-links { gap: 4px 12px; }
+  .shelf-status { margin-top: 4px; }
+}
+@media (max-width: 860px) {
+  .intro-copy .kicker { margin-bottom: 8px; }
+  .intro-copy .opening { line-height: 1.38; }
+  .intro { row-gap: 10px; }
+  .page-section > h2 { margin-bottom: 14px; }
+}
+
+/* Exact accepted app identities sit beside readable launcher labels. */
+.shelf-open.app-title-link { display: flex; align-items: center; gap: 6px; max-width: 100%; line-height: inherit; }
+.app-title-link > span { min-width: 0; overflow-wrap: anywhere; }
+.app-title-icon { display: block; flex: 0 0 24px; width: 24px; height: 24px; margin-block: -1px; object-fit: contain; }
+
+.shelf-description a { position: relative; z-index: 3; text-underline-offset: 3px; }
+.shelf-description a:hover { color: var(--green); }

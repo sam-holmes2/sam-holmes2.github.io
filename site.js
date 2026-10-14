@@ -1,14 +1,142 @@
+// Keep a decoded, usable frame visible while another image loads.
+const imageDelivery = (() => {
+  function create(root, label) {
+    const status = document.createElement('div');
+    status.className = 'image-state';
+    status.hidden = true;
+    const message = document.createElement('span');
+    message.setAttribute('role', 'status');
+    message.setAttribute('aria-live', 'polite');
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'image-retry';
+    retry.textContent = 'Retry image';
+    retry.setAttribute('aria-label', 'Retry ' + label + ' image');
+    retry.hidden = true;
+    status.append(message, retry);
+    root.append(status);
+    const state = { root, status, message, retry, serial: 0, pending: false, error: false, retryAction: null };
+    retry.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!state.pending) state.retryAction?.();
+    });
+    return state;
+  }
+  async function ready(image, reload = false) {
+    image.loading = 'eager';
+    image.decoding = 'async';
+    if (reload) {
+      const source = image.getAttribute('src');
+      image.removeAttribute('src');
+      image.setAttribute('src', source);
+    }
+    let timer;
+    let cleanup = () => {};
+    const decoding = typeof image.decode === 'function' ? image.decode() : new Promise((resolve, reject) => {
+      const loaded = () => resolve();
+      const failed = () => reject(new Error('Image request failed'));
+      cleanup = () => { image.removeEventListener('load', loaded); image.removeEventListener('error', failed); };
+      if (image.complete) { image.naturalWidth > 0 ? resolve() : failed(); return; }
+      image.addEventListener('load', loaded, { once: true });
+      image.addEventListener('error', failed, { once: true });
+    });
+    try {
+      await Promise.race([decoding, new Promise((_, reject) => {
+        timer = window.setTimeout(() => reject(new Error('Image loading timed out')), 15000);
+      })]);
+      if (!(image.naturalWidth > 0 && image.naturalHeight > 0)) throw new Error('Image has no decoded pixels');
+    } finally { window.clearTimeout(timer); cleanup(); }
+  }
+  function cancel(state) {
+    state.serial += 1;
+    state.pending = false;
+    state.error = false;
+    state.retryAction = null;
+    state.status.hidden = true;
+    state.root.removeAttribute('aria-busy');
+    state.root.dataset.imageState = 'ready';
+  }
+  async function request(state, image, commit, retryAction, { reload = false, allow = () => true, current = () => true, prepare = null } = {}) {
+    const serial = ++state.serial;
+    state.pending = true;
+    state.error = false;
+    state.retryAction = retryAction;
+    state.root.dataset.imageState = 'loading';
+    state.root.setAttribute('aria-busy', 'true');
+    state.status.hidden = false;
+    state.message.textContent = 'Loading image…';
+    state.retry.hidden = !reload;
+    state.retry.textContent = reload ? 'Retrying…' : 'Retry image';
+    state.retry.setAttribute('aria-disabled', String(reload));
+    try {
+      await (prepare ? prepare(reload) : ready(image, reload));
+      if (serial !== state.serial) return false;
+      if (!current()) { cancel(state); return false; }
+      if (!allow()) { cancel(state); return false; }
+      commit();
+      if (document.activeElement === state.retry) {
+        const target = state.root.querySelector('button:not(.image-retry):not([hidden]), a.gallery-image:not([hidden])')
+          || state.root.closest('.shelf-card')?.querySelector('.shelf-open');
+        target?.focus({ preventScroll: true });
+      }
+      cancel(state);
+      return true;
+    } catch (error) {
+      if (serial !== state.serial) return false;
+      if (!current()) { cancel(state); return false; }
+      state.pending = false;
+      state.error = true;
+      state.root.dataset.imageState = 'error';
+      state.root.removeAttribute('aria-busy');
+      state.message.textContent = 'Image couldn’t load. The current view is unchanged.';
+      state.retry.hidden = false;
+      state.retry.textContent = 'Retry image';
+      state.retry.setAttribute('aria-disabled', 'false');
+      return false;
+    }
+  }
+  return { create, ready, request, cancel };
+})();
+
+const capitalizeQuote = (text) => text.replace(/\p{L}/u, (letter) => letter.toUpperCase());
+
 (() => {
   const dialog = document.querySelector('.project-dialog');
   const panels = [...dialog.querySelectorAll('[data-project]')];
+  const historyKey = 'samuelsManualsProject';
   let opener = null;
+  let openerProject = null;
+  let returnEntry = null;
+  let pendingReturn = null;
+  let closingViaHistory = false;
+  let lastHref = window.location.href;
   const findPanel = (hash) => {
     let id;
     try { id = decodeURIComponent(hash.slice(1)); } catch { return null; }
     return panels.find((panel) => panel.dataset.project === id || [...panel.querySelectorAll('[id]')].some((target) => target.id === id));
   };
+  const readEntry = (panel) => {
+    const entry = window.history.state?.[historyKey];
+    return panel && entry?.version === 1 && entry.project === panel.dataset.project
+      && entry.hash === window.location.hash && typeof entry.parentHash === 'string'
+      && Number.isFinite(entry.x) && Number.isFinite(entry.y) ? entry : null;
+  };
+  function clearEntry() {
+    const state = { ...window.history.state };
+    delete state[historyKey];
+    return Object.keys(state).length ? state : null;
+  }
+  function closeViewer() {
+    const viewer = document.querySelector('.gallery-dialog');
+    if (viewer?.open) viewer.close();
+  }
   function show(panel, trigger = null) {
-    opener = trigger || document.getElementById(panel.dataset.project)?.querySelector('.shelf-open');
+    opener = trigger || (openerProject === panel.dataset.project ? opener : null)
+      || document.getElementById(panel.dataset.project)?.querySelector('.shelf-open');
+    openerProject = panel.dataset.project;
+    returnEntry = readEntry(panel);
+    pendingReturn = null;
     panels.forEach((item) => { item.hidden = item !== panel; });
     dialog.querySelector('h2').textContent = panel.dataset.title;
     document.documentElement.classList.add('gallery-open');
@@ -27,18 +155,50 @@
     event.preventDefault();
     // Keep internal gallery links within the currently open project.
     if (dialog.open && panel.contains(link)) {
-      panel.querySelector(link.hash)?.scrollIntoView({ block: 'nearest' });
+      const target = panel.querySelector(link.hash);
+      target?.scrollIntoView({ block: 'nearest' });
+      target?.querySelector('button:not([hidden]), a[href]')?.focus({ preventScroll: true });
       return;
     }
+    const entry = { version: 1, project: panel.dataset.project, hash: link.hash,
+      parentHash: window.location.hash, x: window.scrollX, y: window.scrollY };
+    window.history.pushState({ ...window.history.state, [historyKey]: entry }, '', link.hash);
+    lastHref = window.location.href;
     show(panel, link);
-    window.history.replaceState(null, '', link.hash);
   });
-  window.addEventListener('hashchange', () => {
+  function syncLocation() {
     const panel = findPanel(window.location.hash);
-    if (panel) show(panel);
-    else if (dialog.open) dialog.close();
-  });
-  dialog.querySelector('[data-project-close]').addEventListener('click', () => dialog.close());
+    if (lastHref === window.location.href && dialog.open === Boolean(panel) && (!panel || !panel.hidden)) return;
+    lastHref = window.location.href;
+    closingViaHistory = false;
+    if (panel) { closeViewer(); show(panel); }
+    else if (dialog.open) {
+      pendingReturn = returnEntry?.parentHash === window.location.hash
+        ? { type: 'restore', ...returnEntry } : null;
+      closeViewer();
+      dialog.close();
+    }
+  }
+  window.addEventListener('popstate', syncLocation);
+  window.addEventListener('hashchange', syncLocation);
+  window.addEventListener('pageshow', syncLocation);
+  function closeProject() {
+    if (!dialog.open || closingViaHistory) return;
+    const entry = readEntry(panels.find((panel) => !panel.hidden));
+    if (entry && window.history.length > 1) {
+      closingViaHistory = true;
+      window.history.back();
+    } else {
+      // A direct link has no known in-site parent entry to traverse.
+      pendingReturn = { type: 'fallback' };
+      window.history.replaceState(clearEntry(), '', '#projects');
+      lastHref = window.location.href;
+      closeViewer();
+      dialog.close();
+    }
+  }
+  dialog.querySelector('[data-project-close]').addEventListener('click', closeProject);
+  dialog.addEventListener('cancel', (event) => { event.preventDefault(); closeProject(); });
   dialog.addEventListener('keydown', (event) => {
     if (event.key !== 'Tab') return;
     const controls = [...dialog.querySelectorAll('a[href], button:not([disabled]), summary, [tabindex="0"]')]
@@ -56,12 +216,26 @@
   dialog.addEventListener('click', (event) => {
     if (event.target !== dialog) return;
     const bounds = dialog.getBoundingClientRect();
-    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close();
+    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeProject();
   });
   dialog.addEventListener('close', () => {
     if (!document.querySelector('dialog[open]')) document.documentElement.classList.remove('gallery-open');
-    if (findPanel(window.location.hash)) window.history.replaceState(null, '', '#projects');
-    opener?.focus({ preventScroll: true });
+    if (findPanel(window.location.hash)) {
+      window.history.replaceState(clearEntry(), '', '#projects');
+      lastHref = window.location.href;
+      pendingReturn = { type: 'fallback' };
+    }
+    const closedMenu = opener?.closest('details:not([open])');
+    const focusTarget = closedMenu?.querySelector('summary') || opener;
+    focusTarget?.focus({ preventScroll: true });
+    const target = pendingReturn;
+    const hash = window.location.hash;
+    pendingReturn = null;
+    if (target) window.requestAnimationFrame(() => {
+      if (dialog.open || window.location.hash !== hash) return;
+      if (target.type === 'restore') window.scrollTo({ left: target.x, top: target.y, behavior: 'instant' });
+      else focusTarget?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    });
   });
   const initialPanel = findPanel(window.location.hash);
   if (initialPanel) show(initialPanel);
@@ -155,12 +329,13 @@
 
 (() => {
   const dialog = document.querySelector('.gallery-dialog');
+  const dialogDelivery = imageDelivery.create(dialog, 'enlarged');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let activeGallery = null;
   let opener = null;
   const galleries = [...document.querySelectorAll('[data-gallery]')].map((element) => {
     const slides = [...element.querySelectorAll('.gallery-image')];
-    const gallery = { element, slides, index: 0, timer: null, visible: false, hovered: false, paused: reducedMotion.matches };
+    const gallery = { element, slides, index: 0, timer: null, visible: false, hovered: false, paused: reducedMotion.matches, requestedIndex: null, imageIntent: 0, delivery: imageDelivery.create(element, element.dataset.gallery) };
     const previous = element.querySelector('[data-gallery-prev]');
     const next = element.querySelector('[data-gallery-next]');
     const count = element.querySelector('[data-gallery-count]');
@@ -204,9 +379,10 @@
     return gallery;
   });
 
-  function canPlay(gallery) {
+  function canPlay(gallery, ignorePending = false) {
     const held = gallery.paused || gallery.hovered || gallery.element.contains(document.activeElement) || dialog.open;
-    return gallery.slides.length > 1 && gallery.visible && !document.hidden && !held;
+    return gallery.slides.length > 1 && gallery.visible && !document.hidden && !held
+      && !gallery.delivery.error && (ignorePending || !gallery.delivery.pending);
   }
   function schedule(gallery) {
     window.clearTimeout(gallery.timer);
@@ -222,7 +398,10 @@
     entries.forEach((entry) => {
       const gallery = galleries.find((item) => item.element === entry.target);
       gallery.visible = entry.isIntersecting;
-      schedule(gallery);
+      const image = gallery.slides[gallery.index].querySelector('img');
+      if (gallery.visible && !gallery.delivery.pending && !gallery.delivery.error && (!image.complete || !image.naturalWidth)) {
+        selectIndex(gallery, gallery.index);
+      } else schedule(gallery);
     });
   }, { threshold: .15 });
   galleries.forEach((gallery) => observer.observe(gallery.element));
@@ -248,23 +427,49 @@
     gallery.element.querySelector('.gallery-toolbar').hidden = gallery.element.classList.contains('interest-gallery') && gallery.slides.length < 2;
   }
   function select(gallery, step, automatic = false) {
-    gallery.index = (gallery.index + step + gallery.slides.length) % gallery.slides.length;
-    render(gallery, automatic);
-    if (dialog.open && activeGallery === gallery) renderDialog();
+    const origin = gallery.requestedIndex ?? gallery.index;
+    return selectIndex(gallery, (origin + step + gallery.slides.length) % gallery.slides.length, automatic);
+  }
+  async function selectIndex(gallery, index, automatic = false, reload = false, viewer = false) {
+    const intent = ++gallery.imageIntent;
+    const viewing = viewer || (dialog.open && activeGallery === gallery);
+    const state = viewing ? dialogDelivery : gallery.delivery;
+    const source = gallery.slides[index].querySelector('img');
+    const next = viewing ? dialog.querySelector('.dialog-image').cloneNode(false) : source;
+    if (viewing) { next.src = source.src; next.alt = source.alt; }
+    gallery.requestedIndex = index;
+    window.clearTimeout(gallery.timer);
+    gallery.timer = null;
+    await imageDelivery.request(state, next, () => {
+      gallery.index = index;
+      render(gallery, automatic);
+      if (viewing) {
+        dialog.querySelector('.dialog-image').replaceWith(next);
+        updateDialog(gallery);
+      }
+    }, () => selectIndex(gallery, index, false, true, viewing), {
+      reload,
+      current: () => intent === gallery.imageIntent && (!viewing || (dialog.open && activeGallery === gallery)),
+      allow: () => !automatic || canPlay(gallery, true),
+      prepare: viewing ? (retry) => Promise.all([
+        imageDelivery.ready(source, retry && !source.naturalWidth),
+        imageDelivery.ready(next, retry)
+      ]) : null
+    });
+    if (intent === gallery.imageIntent && !state.error) gallery.requestedIndex = null;
     schedule(gallery);
   }
   function renderDialog() {
-    const slide = activeGallery.slides[activeGallery.index];
-    const source = slide.querySelector('img');
-    const image = dialog.querySelector('.dialog-image');
-    image.src = source.src;
-    image.alt = source.alt;
-    dialog.querySelector('h2').textContent = activeGallery.element.dataset.gallery;
+    return selectIndex(activeGallery, activeGallery.index, false, false, true);
+  }
+  function updateDialog(gallery) {
+    const slide = gallery.slides[gallery.index];
+    dialog.querySelector('h2').textContent = gallery.element.dataset.gallery;
     dialog.querySelector('[data-dialog-caption]').textContent = slide.dataset.caption;
-    dialog.querySelector('[data-dialog-caption]').hidden = activeGallery.element.classList.contains('interest-gallery');
-    dialog.querySelector('[data-dialog-count]').textContent = `${activeGallery.index + 1} / ${activeGallery.slides.length}`;
+    dialog.querySelector('[data-dialog-caption]').hidden = gallery.element.classList.contains('interest-gallery');
+    dialog.querySelector('[data-dialog-count]').textContent = String(gallery.index + 1) + ' / ' + gallery.slides.length;
     ['[data-dialog-prev]', '[data-dialog-next]', '[data-dialog-count]'].forEach((selector) => {
-      dialog.querySelector(selector).hidden = activeGallery.slides.length < 2;
+      dialog.querySelector(selector).hidden = gallery.slides.length < 2;
     });
     const viewport = dialog.querySelector('.dialog-image-viewport');
     viewport.scrollTop = 0; viewport.scrollLeft = 0;
@@ -275,9 +480,9 @@
     activeGallery = gallery;
     opener = event.currentTarget;
     setZoom(false);
-    renderDialog();
     document.documentElement.classList.add('gallery-open');
     dialog.showModal();
+    renderDialog();
     galleries.forEach(schedule);
   }
   function setZoom(active) {
@@ -329,6 +534,8 @@
     if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close();
   });
   dialog.addEventListener('close', () => {
+    imageDelivery.cancel(dialogDelivery);
+    if (activeGallery) { activeGallery.imageIntent += 1; activeGallery.requestedIndex = null; }
     if (!document.querySelector('dialog[open]')) document.documentElement.classList.remove('gallery-open');
     const focusTarget = opener?.classList.contains('gallery-image') ? activeGallery.slides[activeGallery.index] : opener;
     focusTarget?.focus({ preventScroll: true });
@@ -339,7 +546,7 @@
     const gallery = galleries.find(g => g.element.closest('[data-project]')?.dataset.project === event.detail.project);
     if (!gallery) return;
     const index = gallery.slides.findIndex(s => s.querySelector('img').getAttribute('src') === event.detail.source);
-    if (index >= 0) { gallery.index = index; render(gallery); schedule(gallery); }
+    if (index >= 0) selectIndex(gallery, index);
   });
 })();
 
@@ -353,10 +560,12 @@
     const sources = [...gallery.querySelectorAll('.gallery-image img')];
     if (sources.length < 2) return;
     const frame = card.querySelector('.shelf-image');
-    const initial = frame.querySelector('img').getAttribute('src');
+    const original = frame.querySelector('img');
+    const initial = original.getAttribute('src');
     sources.sort((a, b) => Number(b.getAttribute('src') === initial) - Number(a.getAttribute('src') === initial));
     const images = sources.map((source, index) => {
-      const image = source.cloneNode();
+      const image = index === 0 ? original : source.cloneNode();
+      image.hidden = index !== 0;
       image.classList.toggle('is-current', index === 0);
       image.setAttribute('aria-hidden', String(index !== 0));
       return image;
@@ -371,7 +580,7 @@
     pause.textContent = 'Ⅱ';
     pause.setAttribute('aria-label', `Pause ${card.querySelector('h3').textContent} previews`);
     frame.append(pause);
-    const preview = { card, frame, images, index: 0, timer: null, visible: false, hovered: false, paused: false };
+    const preview = { card, frame, images, index: 0, timer: null, visible: false, hovered: false, paused: false, delivery: imageDelivery.create(frame, card.id) };
     previews.push(preview);
     pause.addEventListener('click', () => {
       preview.paused = !preview.paused;
@@ -384,9 +593,10 @@
     card.addEventListener('focusin', () => schedule(preview));
     card.addEventListener('focusout', () => window.setTimeout(() => schedule(preview), 0));
   });
-  function canPlay(preview) {
+  function canPlay(preview, ignorePending = false) {
     return preview.visible && !preview.paused && !preview.hovered && !preview.card.contains(document.activeElement)
-      && !document.hidden && !document.querySelector('dialog[open]');
+      && !document.hidden && !document.querySelector('dialog[open]')
+      && !preview.delivery.error && (ignorePending || !preview.delivery.pending);
   }
   function schedule(preview) {
     window.clearTimeout(preview.timer);
@@ -394,19 +604,31 @@
     if (!canPlay(preview)) return;
     preview.timer = window.setTimeout(() => {
       if (!canPlay(preview)) return;
-      preview.index = (preview.index + 1) % preview.images.length;
-      preview.images.forEach((image, index) => {
-        image.classList.toggle('is-current', index === preview.index);
-        image.setAttribute('aria-hidden', String(index !== preview.index));
-      });
-      preview.frame.dataset.carouselIndex = String(preview.index);
-      schedule(preview);
+      showPreview(preview, (preview.index + 1) % preview.images.length, true);
     }, 7500);
+  }
+  async function showPreview(preview, index, automatic = false, reload = false) {
+    await imageDelivery.request(preview.delivery, preview.images[index], () => {
+      preview.index = index;
+      preview.images[index].hidden = false;
+      preview.images.forEach((image, current) => {
+        image.classList.toggle('is-current', current === index);
+        image.setAttribute('aria-hidden', String(current !== index));
+      });
+      preview.frame.dataset.carouselIndex = String(index);
+    }, () => showPreview(preview, index, false, true), {
+      reload,
+      allow: () => !automatic || canPlay(preview, true)
+    });
+    schedule(preview);
   }
   const observer = new IntersectionObserver((entries) => entries.forEach((entry) => {
     const preview = previews.find(item => item.card === entry.target);
     preview.visible = entry.isIntersecting;
-    schedule(preview);
+    const image = preview.images[preview.index];
+    if (preview.visible && !preview.delivery.pending && !preview.delivery.error && (!image.complete || !image.naturalWidth)) {
+      showPreview(preview, preview.index);
+    } else schedule(preview);
   }), { threshold: .15 });
   previews.forEach(preview => observer.observe(preview.card));
   document.addEventListener('visibilitychange', () => previews.forEach(schedule));
@@ -421,7 +643,6 @@
   const approved = JSON.parse(document.querySelector('#approved-quotes').textContent)
     .filter((quote) => quote.approved === true && quote.text && quote.attribution);
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-
   document.querySelectorAll('[data-quote-group]').forEach((carousel) => {
     const quotes = approved.filter((quote) => quote.group === carousel.dataset.quoteGroup);
     if (!quotes.length) { carousel.hidden = true; return; }
@@ -435,7 +656,7 @@
     function render(animate = false) {
       window.clearTimeout(fadeTimer);
       const commit = () => {
-        text.textContent = `“${quotes[index].text}”`;
+        text.textContent = `“${capitalizeQuote(quotes[index].text)}”`;
         attribution.textContent = ` / ${quotes[index].attribution}`;
         carousel.dataset.quoteId = quotes[index].id;
         copy.classList.remove('is-changing');
@@ -466,7 +687,7 @@
     carousel.addEventListener('focusout', () => window.setTimeout(schedule, 0));
     document.addEventListener('visibilitychange', schedule);
     reducedMotion.addEventListener('change', () => { if (reducedMotion.matches) render(); });
-    carousel.querySelectorAll('button').forEach((button) => { button.hidden = quotes.length < 2; });
+    carousel.querySelectorAll('[data-quote-prev], [data-quote-next]').forEach((button) => { button.hidden = quotes.length < 2; });
     render();
     schedule();
   });
@@ -475,8 +696,19 @@
   const inspiration = document.querySelector('.inspiration-bar');
   const root = document.documentElement;
   const measure = () => {
+    const atBottom = window.scrollY + window.innerHeight >= root.scrollHeight - 2;
+    const footerHeight = inspiration.getBoundingClientRect().height;
+    const previousFooterHeight = parseFloat(root.style.getPropertyValue('--inspiration-height'));
     root.style.setProperty('--header-height', `${header.getBoundingClientRect().height}px`);
-    root.style.setProperty('--inspiration-height', `${inspiration.getBoundingClientRect().height}px`);
+    root.style.setProperty('--inspiration-height', `${footerHeight}px`);
+    // Keep the final paragraph above a growing footer when the reader is at the end.
+    if (atBottom && footerHeight !== previousFooterHeight && !document.querySelector('dialog[open]')) {
+      window.requestAnimationFrame(() => {
+        if (!document.querySelector('dialog[open]')) {
+          window.scrollTo({ top: root.scrollHeight, behavior: 'instant' });
+        }
+      });
+    }
   };
   // Different enter/exit thresholds avoid a shrink/expand loop from layout reflow.
   const compact = () => {
@@ -489,4 +721,28 @@
   window.addEventListener('pageshow', compact);
   compact();
   measure();
+})();
+
+// The local review server supplies optional links outside the public artifact.
+(async () => {
+  if (!['localhost', '127.0.0.1'].includes(window.location.hostname) || window.location.port !== '4181') return;
+  try {
+    const config = document.querySelector('meta[name="manuals-local-treasury-demo"]');
+    if (!config) return;
+    const demo = new URL(config.content);
+    if (demo.protocol !== 'http:' || !['localhost', '127.0.0.1'].includes(demo.hostname) || demo.username || demo.password) return;
+    const shelf = document.querySelector('#treasury .shelf-copy');
+    const details = document.querySelector('[data-project="treasury"] .project-links');
+    if (!shelf || !details) return;
+    let shelfLinks = shelf.querySelector('.shelf-links');
+    if (!shelfLinks) { shelfLinks = document.createElement('div'); shelfLinks.className = 'shelf-links'; shelf.append(shelfLinks); }
+    [shelfLinks, details].forEach((container) => {
+      const link = document.createElement('a');
+      link.href = demo.href;
+      link.rel = 'noreferrer noopener';
+      link.textContent = 'Check out demo site ↗';
+      if (container === details) link.className = 'text-link';
+      container.append(link);
+    });
+  } catch { /* Optional review links do not affect the public site. */ }
 })();
