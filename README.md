@@ -4,18 +4,6 @@ Sam Holmes’s personal website: projects, writing, interests and the ideas behi
 
 **Visit [samuelsmanuals.com](https://samuelsmanuals.com/).**
 
-## Local preview
-
-This is a static HTML, CSS and JavaScript site. No package installation or build step is required.
-
-From the repository root, run:
-
-```sh
-python3 -m http.server 8000
-```
-
-Then open [localhost:8000](http://localhost:8000/).
-
 ## Structure
 
 - `index.html`: content and page structure.
