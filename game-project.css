@@ -1,0 +1,2 @@
+/* A compact text-only introduction while the game is in development. */
+#projects .project-rows > .game-project { grid-template-columns: minmax(0, 1fr); }
