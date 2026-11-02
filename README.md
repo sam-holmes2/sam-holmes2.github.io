@@ -16,3 +16,7 @@ Sam Holmes’s personal website: projects, writing, interests and the ideas behi
 GitHub Pages serves the repository root on the `main` branch. Changes pushed there update the live site. `CNAME` retains the custom domain, and `.nojekyll` keeps deployment static.
 
 Review changes locally before publishing, including narrow layouts, keyboard navigation, image galleries and the Pause carousels control. Use only approved public-safe images and examples. This repository hosts the portfolio; the featured apps have separate release processes.
+
+## Licensing
+
+Original program and layout code is [MIT licensed](LICENSE). Prose, photos, artwork, gallery screenshots, logos and other creative content are excluded from that grant, including content embedded in code or SVG. See [creative-content terms](CONTENT-LICENSE.md) and [third-party notices](THIRD_PARTY_NOTICES.md). Existing express licences and other rightsholders’ terms remain unchanged.
