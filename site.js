@@ -90,7 +90,7 @@ const imageDelivery = (() => {
     state.retryAction = retryAction;
     state.root.dataset.imageState = 'loading';
     state.root.setAttribute('aria-busy', 'true');
-    state.status.hidden = true;
+    state.status.hidden = !reload;
     state.message.textContent = 'Loading image…';
     state.retry.hidden = !reload;
     state.retry.textContent = reload ? 'Retrying…' : 'Retry image';
