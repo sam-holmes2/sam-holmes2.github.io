@@ -420,7 +420,9 @@ document.addEventListener('focusin', (event) => {
     links.forEach((link) => {
       const active = link.dataset.sectionLink === id;
       link.classList.toggle("is-active", active);
-      if (active && !childId) link.setAttribute("aria-current", "location");
+      const childLink = childId && sublinks.find((child) => child.dataset.subsectionLink === childId && child.closest('nav') === link.closest('nav'));
+      const childCollapsed = childLink?.closest('details.index-links-disclosure:not([open])');
+      if (active && (!childId || childCollapsed)) link.setAttribute("aria-current", "location");
       else link.removeAttribute("aria-current");
     });
     sublinks.forEach((link) => {
@@ -475,7 +477,7 @@ document.addEventListener('focusin', (event) => {
   });
 
   document.querySelectorAll('.index-links-disclosure').forEach((details) => {
-    details.addEventListener('toggle', () => highlightContext(effectiveTarget));
+    details.addEventListener('toggle', () => { highlightContext(effectiveTarget); updateActiveSection(); });
   });
 
   const updateCircuit = () => {

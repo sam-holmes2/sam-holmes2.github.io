@@ -637,7 +637,12 @@ body { font-size: 1rem; line-height: 1.6; }
   .mobile-index > nav { padding-bottom: 14px; gap: 8px 18px; }
   .mobile-index a, .mobile-index .index-children a { min-height: 44px; padding-block: 10px; font-size: .875rem; line-height: 1.45; }
   .mobile-index .index-children { margin: 0 0 4px 20px; gap: 0; }
-  .mobile-index .index-links-disclosure > summary { min-height: 44px; }
+  .mobile-index .index-group { position: relative; }
+  .mobile-index .index-group > a { margin-right: 52px; }
+  .mobile-index .index-links-disclosure > summary { position: absolute; top: 0; right: 0; display: flex; justify-content: center; width: 44px; min-height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 4px; }
+  .mobile-index .index-links-disclosure[open] > summary { color: var(--green); background: var(--panel); }
+  .mobile-index .index-links-disclosure > summary .disclosure-caret { width: 12px; }
+  .mobile-index .index-group:has(a.is-active) > a { color: var(--green); }
   .gallery-dialog .dialog-toolbar button, .gallery-dialog .preview-toggle { min-height: 44px; padding: 8px 12px; }
   .gallery-dialog .dialog-image-viewport, .gallery-dialog .dialog-image { max-height: calc(100dvh - 188px); }
   .inspiration-bar .quote-carousel > button { min-width: 44px; min-height: 44px; }
