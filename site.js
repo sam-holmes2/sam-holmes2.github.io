@@ -989,7 +989,9 @@ document.addEventListener('focusin', (event) => {
       let target = pair.phone.querySelector('summary');
       if (!isPhone) {
         const href = origin.getAttribute('href');
-        const section = origin.dataset.sectionLink;
+        const section = origin.dataset.sectionLink
+          || (origin.matches('.index-links-disclosure > summary')
+            ? origin.closest('.index-group')?.querySelector('[data-section-link]')?.dataset.sectionLink : null);
         target = [...pair.desktop.querySelectorAll('a, summary')].find((item) =>
           (href && item.getAttribute('href') === href) || (section && item.dataset.sectionLink === section))
           || pair.desktop.querySelector('[aria-current="location"]') || pair.desktop.querySelector('a');
