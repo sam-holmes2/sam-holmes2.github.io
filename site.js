@@ -160,7 +160,7 @@ const returnView = (() => {
     if (window.performance?.getEntriesByType?.('navigation')?.[0]?.type === 'back_forward'
       && plain(state) && valid(state[key])) saved = state[key];
   } catch { /* History restoration is optional. */ }
-  window.addEventListener('pagehide', () => {
+  function save() {
     try {
       const state = window.history.state;
       if (state !== null && (!plain(state) || (Object.hasOwn(state, key) && !valid(state[key])))) return;
@@ -174,8 +174,10 @@ const returnView = (() => {
       };
       window.history.replaceState(next, '', window.location.href);
     } catch { /* Never block leaving, including browsers without history storage. */ }
-  });
+  }
+  window.addEventListener('pagehide', save);
   return {
+    save,
     paused: saved?.paused ?? false,
     earlierOpen: typeof saved?.earlierOpen === 'boolean' ? saved.earlierOpen : undefined,
     index(element, slides) {
@@ -270,7 +272,7 @@ document.addEventListener('focusin', (event) => {
   let focusRevision = 0;
   let departure = null;
   const returnKey = 'samuelsManualsReturnFocus';
-  const returnLinks = [...document.querySelectorAll('a[href]')];
+  const returnLinks = () => [...document.querySelectorAll('a[href]')];
   const earlier = document.getElementById('earlier-projects-disclosure');
   if (earlier && typeof returnView.earlierOpen === 'boolean') earlier.open = returnView.earlierOpen;
   else if (earlier && window.performance?.getEntriesByType?.('navigation')?.[0]?.type === 'back_forward') {
@@ -313,7 +315,7 @@ document.addEventListener('focusin', (event) => {
     return Object.keys(next).length ? next : null;
   }
   function departureLink(link) {
-    if (!link || !link.isConnected || !returnLinks.includes(link) || link.hasAttribute('download')) return false;
+    if (!link || !link.isConnected || !returnLinks().includes(link) || link.hasAttribute('download')) return false;
     if (link.target && link.target.toLowerCase() !== '_self') return false;
     try {
       const url = new URL(link.href, window.location.href);
@@ -325,13 +327,15 @@ document.addEventListener('focusin', (event) => {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button > 0) return;
     const link = event.target.closest('a[href]');
     if (!departureLink(link)) return;
+    // Save while this document is active; pagehide may be too late for history writes.
+    returnView.save();
     departure = { link, hash: window.location.hash };
     try {
       const state = window.history.state;
       if (state !== null && (!plainRecord(state) || (Object.hasOwn(state, returnKey) && !breadcrumb(state[returnKey])))) return;
       const next = state === null ? {} : cloneRecord(state);
       if (!next) return;
-      next[returnKey] = { version: 1, index: returnLinks.indexOf(link), href: link.getAttribute('href'), hash: window.location.hash };
+      next[returnKey] = { version: 1, index: returnLinks().indexOf(link), href: link.getAttribute('href'), hash: window.location.hash };
       window.history.replaceState(next, '', window.location.href);
     } catch { /* Optional focus metadata must never block the link. */ }
   });
@@ -347,7 +351,7 @@ document.addEventListener('focusin', (event) => {
       if (active && active !== document.body && active !== document.documentElement && active.isConnected) return;
       const state = window.history.state;
       const saved = plainRecord(state) ? state[returnKey] : null;
-      const recorded = breadcrumb(saved) && saved.hash === hash ? returnLinks[saved.index] : null;
+      const recorded = breadcrumb(saved) && saved.hash === hash ? returnLinks()[saved.index] : null;
       const link = departure?.hash === hash ? departure.link
         : recorded && recorded.getAttribute('href') === saved.href ? recorded : null;
       if (departureLink(link) && link.getClientRects().length) link.focus({ preventScroll: true });
